@@ -1,0 +1,220 @@
+/**
+ * Nexus Scraper - Popup CSS
+ */
+
+:root {
+  --nx-gold: #e2b339;
+  --nx-gold-hover: #f3c759;
+  --nx-bg-dark: #090e1a;
+  --nx-bg-card: #0f192d;
+  --nx-border: rgba(226, 179, 57, 0.25);
+  --nx-text-primary: #ffffff;
+  --nx-text-muted: #8fa0b5;
+  --nx-radius: 10px;
+  --nx-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 340px;
+  background-color: var(--nx-bg-dark);
+  color: var(--nx-text-primary);
+  font-family: var(--nx-font);
+  font-size: 13px;
+  padding: 14px;
+}
+
+.nx-popup-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nx-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nx-popup-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nx-icon-gold {
+  color: var(--nx-gold);
+  font-size: 16px;
+}
+
+.nx-popup-brand h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.nx-version {
+  font-size: 11px;
+  color: var(--nx-gold);
+  background: rgba(226, 179, 57, 0.15);
+  padding: 2px 6px;
+  border-radius: 12px;
+}
+
+.nx-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nx-card {
+  background: var(--nx-bg-card);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nx-card-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--nx-gold);
+  letter-spacing: 0.6px;
+}
+
+.nx-tab-info {
+  font-size: 12px;
+  color: var(--nx-text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.nx-input-group input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.nx-input-group input:focus {
+  border-color: var(--nx-gold);
+}
+
+.nx-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--nx-text-muted);
+}
+
+.nx-options-row select {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  outline: none;
+}
+
+.nx-btn-primary, .nx-btn-secondary {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.nx-btn-primary {
+  background: linear-gradient(135deg, var(--nx-gold) 0%, #ca9b2b 100%);
+  color: #080d19;
+  box-shadow: 0 4px 12px rgba(226, 179, 57, 0.3);
+}
+
+.nx-btn-primary:hover {
+  background: linear-gradient(135deg, var(--nx-gold-hover) 0%, var(--nx-gold) 100%);
+}
+
+.nx-btn-secondary {
+  background: rgba(226, 179, 57, 0.15);
+  border: 1px solid rgba(226, 179, 57, 0.4);
+  color: var(--nx-gold);
+}
+
+.nx-btn-secondary:hover {
+  background: rgba(226, 179, 57, 0.25);
+}
+
+.nx-btn-primary:disabled, .nx-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Zone de progression */
+.nx-progress-container {
+  background: rgba(15, 25, 45, 0.9);
+  border: 1px solid var(--nx-gold);
+  border-radius: var(--nx-radius);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nx-progress-label {
+  font-size: 12px;
+  color: var(--nx-gold);
+  font-weight: 600;
+}
+
+.nx-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.nx-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--nx-gold);
+  transition: width 0.2s ease;
+}
+
+.nx-progress-sub {
+  font-size: 11px;
+  color: var(--nx-text-muted);
+  text-align: right;
+}
+
+.nx-popup-footer {
+  text-align: center;
+  font-size: 10.5px;
+  color: #55677d;
+  padding-top: 4px;
+}

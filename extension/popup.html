@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus Scraper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="nx-popup-container">
+    <header class="nx-popup-header">
+      <div class="nx-popup-brand">
+        <span class="nx-icon-gold">⚡</span>
+        <h1>Nexus Scraper</h1>
+      </div>
+      <span class="nx-version">v1.0</span>
+    </header>
+
+    <main class="nx-popup-body">
+      <!-- Info sur l'onglet actif -->
+      <div class="nx-card" id="nx-active-tab-card">
+        <div class="nx-card-title">Page Détectée</div>
+        <div class="nx-tab-info" id="nx-tab-info">Recherche de la page en cours...</div>
+        <button class="nx-btn-primary" id="nx-btn-dl-active" style="display: none;">
+          📥 Télécharger ce Chapitre
+        </button>
+      </div>
+
+      <!-- Téléchargement par URL manuelle -->
+      <div class="nx-card">
+        <div class="nx-card-title">Télécharger par URL</div>
+        <div class="nx-input-group">
+          <input type="text" id="nx-custom-url" placeholder="https://nexusscanlation.com/.../chapter/..." spellcheck="false">
+        </div>
+        
+        <div class="nx-options-row">
+          <label for="nx-popup-format">Format :</label>
+          <select id="nx-popup-format">
+            <option value="image/jpeg">JPG (Qualité 95%)</option>
+            <option value="image/png">PNG (Sans perte)</option>
+          </select>
+        </div>
+
+        <button class="nx-btn-secondary" id="nx-btn-dl-custom">
+          ⚡ Télécharger depuis l'URL
+        </button>
+      </div>
+
+      <!-- Zone de progression -->
+      <div class="nx-progress-container" id="nx-progress-box" style="display: none;">
+        <div class="nx-progress-label" id="nx-progress-msg">Démarrage...</div>
+        <div class="nx-progress-track">
+          <div class="nx-progress-fill" id="nx-progress-fill"></div>
+        </div>
+        <div class="nx-progress-sub" id="nx-progress-sub">0%</div>
+      </div>
+    </main>
+
+    <footer class="nx-popup-footer">
+      <span>Prêt pour NexusScanlation</span>
+    </footer>
+  </div>
+
+  <script src="lib/jszip.min.js"></script>
+  <script src="lib/scraper-core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

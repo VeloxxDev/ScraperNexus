@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Nexus Scraper - Téléchargeur de Manhwa",
+  "version": "1.0.0",
+  "description": "Téléchargeur haute qualité de chapitres Manhwa pour NexusScanlation au format ZIP avec déchiffrement automatique.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Nexus Scraper",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "host_permissions": [
+    "*://nexusscanlation.com/*",
+    "*://*.nexusscanlation.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://nexusscanlation.com/*",
+        "*://*.nexusscanlation.com/*"
+      ],
+      "js": [
+        "lib/jszip.min.js",
+        "lib/scraper-core.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
