@@ -211,10 +211,70 @@
         return pageCopy;
       });
 
+      // Analyse intelligente pour détecter les vraies pages de récit vs crédits/bannières
+      const classifiedPages = this.detectStoryPages(pages);
+
       return {
         ...chapter,
-        paginas: pages
+        paginas: classifiedPages
       };
+    },
+
+    /**
+     * Analyse géométrique et positionnelle pour identifier les vraies pages de récit
+     * Écarte automatiquement les pages d'intro (crédits de la team), bannières Discord et annonces de fin
+     */
+    detectStoryPages(pages) {
+      if (!pages || pages.length === 0) return [];
+
+      const widthCounts = {};
+      pages.forEach(p => {
+        widthCounts[p.w] = (widthCounts[p.w] || 0) + 1;
+      });
+
+      let dominantWidth = pages[0].w;
+      let maxCount = 0;
+      for (const [w, count] of Object.entries(widthCounts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantWidth = Number(w);
+        }
+      }
+
+      const total = pages.length;
+
+      return pages.map((page, index) => {
+        const ratio = page.h / page.w;
+        let isStory = true;
+        let reason = 'Page du récit';
+
+        // Page 1 : Souvent une page de crédits ou disclaimer de la scanlation
+        if (index === 0) {
+          if (ratio < 1.8 || page.w !== dominantWidth) {
+            isStory = false;
+            reason = 'Page d\'intro / crédits de la team';
+          }
+        }
+        // Pages de fin : Bannières de recrutement, Discord ou appel aux dons
+        else if (index >= total - 3) {
+          if (ratio < 1.8 || page.w !== dominantWidth) {
+            isStory = false;
+            reason = 'Page de fin / recrutement / discord';
+          }
+        }
+        // Bannière isolée très courte aux extrémités
+        else if (ratio < 1.0 && (index <= 1 || index >= total - 4)) {
+          isStory = false;
+          reason = 'Bannière / annonce promotionnelle';
+        }
+
+        return {
+          ...page,
+          isStory,
+          reason,
+          ratio: Number(ratio.toFixed(2))
+        };
+      });
     },
 
     /**
@@ -406,7 +466,7 @@
      * Télécharge un chapitre complet et génère une archive .ZIP prête à l'emploi
      * @param {string} serieSlug
      * @param {string} capSlug
-     * @param {Object} options { onProgress: (done, total, message) => {}, format: 'image/jpeg', quality: 0.95, zipInstance: JSZip }
+     * @param {Object} options { onProgress: (done, total, message) => {}, format: 'image/jpeg', quality: 0.95, zipInstance: JSZip, selectedPageOrders: number[], filterStoryOnly: boolean, chapterData: Object }
      */
     async downloadChapterAsZip(serieSlug, capSlug, options = {}) {
       const onProgress = options.onProgress || (() => {});
@@ -417,12 +477,28 @@
       }
 
       onProgress(0, 1, 'Récupération des métadonnées du chapitre...');
-      const chapter = await this.getChapterData(serieSlug, capSlug);
-      const pages = chapter.paginas || [];
-      const totalPages = pages.length;
+      const chapter = options.chapterData || await this.getChapterData(serieSlug, capSlug);
+      const allPages = chapter.paginas || [];
 
-      if (totalPages === 0) {
+      if (allPages.length === 0) {
         throw new Error('Aucune page trouvée dans ce chapitre.');
+      }
+
+      // Filtrage des pages à inclure selon les options fournies
+      let pages = allPages;
+      if (Array.isArray(options.selectedPageOrders) && options.selectedPageOrders.length > 0) {
+        const orderSet = new Set(options.selectedPageOrders);
+        pages = allPages.filter(p => orderSet.has(p.orden));
+      } else if (options.filterStoryOnly) {
+        const storyPages = allPages.filter(p => p.isStory);
+        if (storyPages.length > 0) {
+          pages = storyPages;
+        }
+      }
+
+      const totalPages = pages.length;
+      if (totalPages === 0) {
+        throw new Error('Aucune page sélectionnée pour le téléchargement.');
       }
 
       // Formatage du nom de fichier ZIP
@@ -440,15 +516,16 @@
 
       for (let i = 0; i < pages.length; i += concurrency) {
         const batch = pages.slice(i, i + concurrency);
-        await Promise.all(batch.map(async (page) => {
+        await Promise.all(batch.map(async (page, batchIndex) => {
           const pageBlob = await this.downloadAndProcessPage(page, {
             format: options.format || 'image/jpeg',
             quality: options.quality ?? 0.95
           });
 
-          // Numérotation propre à 3 chiffres : 001.jpg, 002.jpg...
+          // Numérotation séquentielle propre à 3 chiffres : 001.jpg, 002.jpg...
+          const globalIndex = i + batchIndex + 1;
           const ext = options.format === 'image/png' ? 'png' : 'jpg';
-          const fileIndex = String(page.orden).padStart(3, '0');
+          const fileIndex = String(globalIndex).padStart(3, '0');
           const fileName = `${fileIndex}.${ext}`;
 
           folder.file(fileName, pageBlob);

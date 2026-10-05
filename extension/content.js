@@ -1,20 +1,16 @@
 /**
  * Nexus Scraper - Content Script
- * Injecte les boutons de téléchargement et gère l'UI de progression
+ * Détection intelligente des pages de récit, sélection interactive et boutons intégrés
  */
 
 (function () {
   'use strict';
 
-  // Éviter les injections multiples
   if (window.__nxScraperInjected) return;
   window.__nxScraperInjected = true;
 
   let isDownloading = false;
 
-  /**
-   * Icône SVG de téléchargement
-   */
   const SVG_DOWNLOAD = `
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -23,16 +19,8 @@
     </svg>
   `;
 
-  const SVG_SPINNER = `
-    <svg class="nx-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: nx-rotate 1s linear infinite;">
-      <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-      <path d="M12 2a10 10 0 0 1 10 10"></path>
-    </svg>
-    <style>@keyframes nx-rotate { 100% { transform: rotate(360deg); } }</style>
-  `;
-
   /**
-   * Création ou récupération de la modale de progression
+   * Modale de progression
    */
   function getProgressModal() {
     let overlay = document.getElementById('nx-progress-modal-overlay');
@@ -53,21 +41,14 @@
       document.body.appendChild(overlay);
 
       document.getElementById('nx-modal-close').addEventListener('click', () => {
-        if (!isDownloading) {
+        if (!isDownloading || confirm('Masquer cette fenêtre ? Le téléchargement continuera en arrière-plan.')) {
           overlay.classList.remove('nx-active');
-        } else {
-          if (confirm('Un téléchargement est en cours. Voulez-vous masquer cette fenêtre ? Le téléchargement continuera en arrière-plan.')) {
-            overlay.classList.remove('nx-active');
-          }
         }
       });
     }
     return overlay;
   }
 
-  /**
-   * Met à jour l'UI de la modale de progression
-   */
   function updateProgress(current, total, message, title = null) {
     const overlay = getProgressModal();
     overlay.classList.add('nx-active');
@@ -89,39 +70,196 @@
   }
 
   /**
-   * Lance le téléchargement d'un chapitre
+   * Modale de sélection et prévisualisation des pages
    */
-  async function startChapterDownload(serieSlug, capSlug, format = 'image/jpeg') {
-    if (isDownloading) {
-      alert('Un téléchargement est déjà en cours. Veuillez patienter.');
-      return;
+  function showSelectionModal(chapter, serieSlug, capSlug, defaultFormat = 'image/jpeg') {
+    let overlay = document.getElementById('nx-selection-modal-overlay');
+    if (overlay) overlay.remove();
+
+    overlay = document.createElement('div');
+    overlay.id = 'nx-selection-modal-overlay';
+
+    const pages = chapter.paginas || [];
+    const storyPages = pages.filter(p => p.isStory);
+    const promoCount = pages.length - storyPages.length;
+    const chapNum = chapter.numero !== undefined ? chapter.numero : capSlug;
+
+    // État local des cases cochées (par défaut, uniquement les pages d'histoire)
+    const selectedOrders = new Set(storyPages.map(p => p.orden));
+
+    overlay.innerHTML = `
+      <div class="nx-selection-modal">
+        <button class="nx-modal-close-btn" id="nx-select-close" title="Fermer">✕</button>
+        
+        <div class="nx-selection-header">
+          <h3>${SVG_DOWNLOAD} Télécharger : Ch.${chapNum}</h3>
+          <div class="nx-selection-summary-badge">
+            <span>🎯 <strong>${storyPages.length}</strong> pages de récit détectées sur ${pages.length} (${promoCount} crédits/bannières écartés)</span>
+          </div>
+        </div>
+
+        <div class="nx-selection-toolbar">
+          <div class="nx-toolbar-buttons">
+            <button class="nx-pill-btn nx-active" id="nx-btn-filter-story">🎯 Récit uniquement (${storyPages.length})</button>
+            <button class="nx-pill-btn" id="nx-btn-filter-all">☑️ Tout sélectionner (${pages.length})</button>
+            <button class="nx-pill-btn" id="nx-btn-filter-none">❌ Tout décocher</button>
+          </div>
+          <select class="nx-format-select" id="nx-modal-format">
+            <option value="image/jpeg" ${defaultFormat === 'image/jpeg' ? 'selected' : ''}>JPG (Qualité 95%)</option>
+            <option value="image/png" ${defaultFormat === 'image/png' ? 'selected' : ''}>PNG (Sans perte)</option>
+          </select>
+        </div>
+
+        <div class="nx-pages-scrollbox" id="nx-pages-list"></div>
+
+        <div class="nx-selection-footer">
+          <label class="nx-remember-choice" title="Ne plus afficher cette fenêtre et télécharger directement le récit en 1 clic">
+            <input type="checkbox" id="nx-remember-auto">
+            <span>Toujours télécharger le récit sans demander</span>
+          </label>
+          <div class="nx-footer-actions">
+            <button class="nx-btn-cancel" id="nx-modal-cancel">Annuler</button>
+            <button class="nx-btn-confirm-dl" id="nx-modal-confirm">
+              🚀 Télécharger (<span id="nx-selected-count">${selectedOrders.size}</span> pages) (.ZIP)
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const listContainer = document.getElementById('nx-pages-list');
+    const confirmBtn = document.getElementById('nx-modal-confirm');
+    const countSpan = document.getElementById('nx-selected-count');
+    const btnStory = document.getElementById('nx-btn-filter-story');
+    const btnAll = document.getElementById('nx-btn-filter-all');
+    const btnNone = document.getElementById('nx-btn-filter-none');
+
+    function renderPageRows() {
+      listContainer.innerHTML = '';
+      pages.forEach(p => {
+        const isChecked = selectedOrders.has(p.orden);
+        const row = document.createElement('div');
+        row.className = `nx-page-row ${isChecked ? 'nx-selected' : ''}`;
+        row.dataset.orden = p.orden;
+
+        const badgeClass = p.isStory ? 'nx-badge-story' : 'nx-badge-promo';
+        const badgeText = p.isStory ? '📖 Récit' : `📢 ${p.reason}`;
+
+        row.innerHTML = `
+          <div class="nx-page-left">
+            <input type="checkbox" class="nx-checkbox" ${isChecked ? 'checked' : ''}>
+            <span class="nx-page-num">Page ${p.orden}</span>
+            <span class="nx-badge ${badgeClass}">${badgeText}</span>
+          </div>
+          <div class="nx-page-dim">${p.w} × ${p.h} px</div>
+        `;
+
+        row.addEventListener('click', (e) => {
+          if (e.target.tagName !== 'INPUT') {
+            const cb = row.querySelector('input');
+            cb.checked = !cb.checked;
+          }
+          const cb = row.querySelector('input');
+          if (cb.checked) {
+            selectedOrders.add(p.orden);
+            row.classList.add('nx-selected');
+          } else {
+            selectedOrders.delete(p.orden);
+            row.classList.remove('nx-selected');
+          }
+          updateCount();
+        });
+
+        listContainer.appendChild(row);
+      });
     }
 
+    function updateCount() {
+      countSpan.textContent = selectedOrders.size;
+      confirmBtn.disabled = selectedOrders.size === 0;
+
+      btnStory.classList.toggle('nx-active', selectedOrders.size === storyPages.length && Array.from(selectedOrders).every(o => storyPages.some(sp => sp.orden === o)));
+      btnAll.classList.toggle('nx-active', selectedOrders.size === pages.length);
+      btnNone.classList.toggle('nx-active', selectedOrders.size === 0);
+    }
+
+    btnStory.addEventListener('click', () => {
+      selectedOrders.clear();
+      storyPages.forEach(p => selectedOrders.add(p.orden));
+      renderPageRows();
+      updateCount();
+    });
+
+    btnAll.addEventListener('click', () => {
+      pages.forEach(p => selectedOrders.add(p.orden));
+      renderPageRows();
+      updateCount();
+    });
+
+    btnNone.addEventListener('click', () => {
+      selectedOrders.clear();
+      renderPageRows();
+      updateCount();
+    });
+
+    document.getElementById('nx-select-close').addEventListener('click', () => overlay.classList.remove('nx-active'));
+    document.getElementById('nx-modal-cancel').addEventListener('click', () => overlay.classList.remove('nx-active'));
+
+    confirmBtn.addEventListener('click', () => {
+      const remember = document.getElementById('nx-remember-auto').checked;
+      if (remember) {
+        localStorage.setItem('nx_auto_download_story', 'true');
+      }
+
+      const format = document.getElementById('nx-modal-format').value;
+      const ordersToDownload = Array.from(selectedOrders);
+
+      overlay.classList.remove('nx-active');
+      executeZipDownload(serieSlug, capSlug, chapter, ordersToDownload, format);
+    });
+
+    renderPageRows();
+    updateCount();
+
+    // Activer l'animation d'ouverture
+    requestAnimationFrame(() => overlay.classList.add('nx-active'));
+  }
+
+  /**
+   * Exécute le téléchargement en arrière-plan avec la modale de progression
+   */
+  async function executeZipDownload(serieSlug, capSlug, preloadedChapter, selectedPageOrders, format) {
+    if (isDownloading) return;
     isDownloading = true;
+
     const overlay = getProgressModal();
     overlay.classList.add('nx-active');
 
     try {
-      updateProgress(0, 1, 'Connexion à l\'API NexusScan...', `Chapitre : ${capSlug}`);
+      updateProgress(0, selectedPageOrders.length, 'Démarrage du téléchargement...', `Chapitre : ${capSlug}`);
 
       const result = await window.ScraperCore.downloadChapterAsZip(serieSlug, capSlug, {
         format,
         quality: 0.95,
         zipInstance: window.JSZip,
+        chapterData: preloadedChapter,
+        selectedPageOrders,
         onProgress: (current, total, message) => {
           updateProgress(current, total, message);
         }
       });
 
-      updateProgress(result.totalPages, result.totalPages, 'Téléchargement du fichier ZIP...');
+      updateProgress(result.totalPages, result.totalPages, 'Téléchargement de l\'archive ZIP...');
       window.ScraperCore.triggerDownload(result.blob, result.filename);
 
       setTimeout(() => {
-        updateProgress(result.totalPages, result.totalPages, 'Terminé avec succès ! 🎉');
+        updateProgress(result.totalPages, result.totalPages, 'Téléchargement terminé ! 🎉');
         setTimeout(() => {
           overlay.classList.remove('nx-active');
           isDownloading = false;
-        }, 2500);
+        }, 2200);
       }, 500);
 
     } catch (err) {
@@ -129,6 +267,36 @@
       updateProgress(0, 0, `Erreur : ${err.message}`);
       alert(`Erreur lors du téléchargement : ${err.message}`);
       isDownloading = false;
+    }
+  }
+
+  /**
+   * Point d'entrée pour lancer le téléchargement (avec sélection ou direct)
+   */
+  async function openSelectionOrDownload(serieSlug, capSlug, format = 'image/jpeg') {
+    if (isDownloading) {
+      alert('Un téléchargement est déjà en cours. Veuillez patienter.');
+      return;
+    }
+
+    try {
+      // Afficher un petit état d'attente
+      updateProgress(0, 1, 'Chargement des informations du chapitre...', 'Analyse du chapitre');
+
+      const chapter = await window.ScraperCore.getChapterData(serieSlug, capSlug);
+      getProgressModal().classList.remove('nx-active');
+
+      // Si l'utilisateur a activé le mode automatique sans demander
+      if (localStorage.getItem('nx_auto_download_story') === 'true') {
+        const storyOrders = chapter.paginas.filter(p => p.isStory).map(p => p.orden);
+        executeZipDownload(serieSlug, capSlug, chapter, storyOrders, format);
+      } else {
+        showSelectionModal(chapter, serieSlug, capSlug, format);
+      }
+    } catch (err) {
+      console.error('Erreur ScraperNexus:', err);
+      alert(`Impossible de charger le chapitre : ${err.message}`);
+      getProgressModal().classList.remove('nx-active');
     }
   }
 
@@ -154,8 +322,8 @@
         <span>Nexus DL</span>
       </div>
       <select class="nx-format-select" id="nx-format-choice" title="Format d'image">
-        <option value="image/jpeg">JPG (Qualité 95%)</option>
-        <option value="image/png">PNG (Sans perte)</option>
+        <option value="image/jpeg">JPG</option>
+        <option value="image/png">PNG</option>
       </select>
       <button class="nx-btn-download" id="nx-btn-chapter-dl">
         ${SVG_DOWNLOAD}
@@ -165,33 +333,31 @@
 
     document.body.appendChild(panel);
 
-    const btn = document.getElementById('nx-btn-chapter-dl');
-    btn.addEventListener('click', () => {
+    document.getElementById('nx-btn-chapter-dl').addEventListener('click', () => {
       const currentSerie = panel.dataset.serieSlug;
       const currentCap = panel.dataset.capSlug;
       const format = document.getElementById('nx-format-choice').value;
-      startChapterDownload(currentSerie, currentCap, format);
+      openSelectionOrDownload(currentSerie, currentCap, format);
     });
   }
 
-  /**
-   * Supprime le panneau flottant si on n'est plus sur un chapitre
-   */
   function removeFloatingChapterPanel() {
-    const panel = document.getElementById('nx-floating-panel');
-    if (panel) panel.remove();
+    document.getElementById('nx-floating-panel')?.remove();
   }
 
   /**
-   * Injection des boutons de téléchargement inline sur la page de la série
+   * Injection propre des boutons dans les cartes de chapitres (page série)
    */
   function injectSeriesChapterButtons(serieSlug) {
-    // Sélectionner les liens vers les chapitres sur la page
+    // 1. Nettoyer tout bouton orphelin qui aurait été injecté dans la grille par erreur
+    document.querySelectorAll('.grid > .nx-chapter-inline-btn').forEach(btn => btn.remove());
+
+    // 2. Sélectionner toutes les cartes de chapitre (liens contenant /chapter/ ou /capitulo/)
     const chapterLinks = document.querySelectorAll('a[href*="/chapter/"], a[href*="/capitulo/"]');
 
     chapterLinks.forEach(link => {
-      if (link.dataset.nxInjected) return;
-      link.dataset.nxInjected = 'true';
+      // Si le bouton est déjà intégré dans cette carte, on ne fait rien
+      if (link.querySelector('.nx-chapter-inline-btn')) return;
 
       const href = link.getAttribute('href');
       const { capSlug } = window.ScraperCore.parseUrl(href);
@@ -199,47 +365,58 @@
 
       const btn = document.createElement('button');
       btn.className = 'nx-chapter-inline-btn';
-      btn.innerHTML = `📥 ZIP`;
-      btn.title = `Télécharger ${capSlug} en ZIP`;
+      btn.type = 'button';
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>ZIP</span>
+      `;
+      btn.title = `Télécharger le chapitre ${capSlug} en ZIP`;
 
       btn.addEventListener('click', (e) => {
+        // Empêcher la navigation vers le chapitre
         e.preventDefault();
         e.stopPropagation();
-        startChapterDownload(serieSlug, capSlug, 'image/jpeg');
+        openSelectionOrDownload(serieSlug, capSlug, 'image/jpeg');
       });
 
-      // Insérer le bouton à côté du lien ou dans son parent
-      link.parentElement?.appendChild(btn);
+      // Insérer le bouton à l'intérieur de la carte link :
+      // On cherche le chevron de fin s'il existe, sinon on l'ajoute à la fin du lien
+      const chevron = link.querySelector('svg:last-child');
+      if (chevron && chevron.parentElement === link) {
+        link.insertBefore(btn, chevron);
+      } else {
+        link.appendChild(btn);
+      }
     });
   }
 
   /**
-   * Analyse l'URL actuelle et adapte l'interface
+   * Analyse et adaptation de l'interface
    */
   function checkAndAdaptUi() {
     const { serieSlug, capSlug } = window.ScraperCore.parseUrl(window.location.href);
 
     if (capSlug && serieSlug) {
-      // Nous sommes sur une page de chapitre
       injectFloatingChapterPanel(serieSlug, capSlug);
     } else {
       removeFloatingChapterPanel();
     }
 
     if (serieSlug && !capSlug) {
-      // Nous sommes sur la page d'une série (catalogue des chapitres)
       injectSeriesChapterButtons(serieSlug);
     }
   }
 
-  // Surveillance des navigations SPA (Next.js)
   let lastUrl = window.location.href;
   setInterval(() => {
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
       checkAndAdaptUi();
     } else {
-      // Pour les séries chargées dynamiquement
       const { serieSlug, capSlug } = window.ScraperCore.parseUrl(window.location.href);
       if (serieSlug && !capSlug) {
         injectSeriesChapterButtons(serieSlug);
@@ -247,7 +424,6 @@
     }
   }, 1200);
 
-  // Initialisation au chargement
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', checkAndAdaptUi);
   } else {
