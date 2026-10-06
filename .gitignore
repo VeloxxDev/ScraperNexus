@@ -1,0 +1,12 @@
+# Scratch and debug files
+scratch/
+*.log
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/
