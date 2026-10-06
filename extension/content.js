@@ -209,9 +209,7 @@
 
     confirmBtn.addEventListener('click', () => {
       const remember = document.getElementById('nx-remember-auto').checked;
-      if (remember) {
-        localStorage.setItem('nx_auto_download_story', 'true');
-      }
+      setAutoDownloadEnabled(remember);
 
       const format = document.getElementById('nx-modal-format').value;
       const ordersToDownload = Array.from(selectedOrders);
@@ -222,6 +220,12 @@
 
     renderPageRows();
     updateCount();
+
+    // Initialiser l'état de la case "Toujours télécharger sans demander"
+    isAutoDownloadEnabled().then(auto => {
+      const cb = document.getElementById('nx-remember-auto');
+      if (cb) cb.checked = auto;
+    });
 
     // Activer l'animation d'ouverture
     requestAnimationFrame(() => overlay.classList.add('nx-active'));
@@ -271,6 +275,44 @@
   }
 
   /**
+   * Gestion de la préférence auto-download (synchronisée avec chrome.storage et localStorage)
+   */
+  async function isAutoDownloadEnabled() {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try {
+        const res = await new Promise(resolve => chrome.storage.local.get(['nx_auto_download_story'], resolve));
+        if (res && res.nx_auto_download_story !== undefined) {
+          return Boolean(res.nx_auto_download_story);
+        }
+      } catch (_) {}
+    }
+    return localStorage.getItem('nx_auto_download_story') === 'true';
+  }
+
+  function setAutoDownloadEnabled(val) {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try {
+        chrome.storage.local.set({ nx_auto_download_story: Boolean(val) });
+      } catch (_) {}
+    }
+    localStorage.setItem('nx_auto_download_story', String(Boolean(val)));
+  }
+
+  // Écouter les messages envoyés depuis le popup de l'extension
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.type === 'NX_SYNC_AUTO_DOWNLOAD') {
+        localStorage.setItem('nx_auto_download_story', String(Boolean(msg.value)));
+        const gearBtn = document.getElementById('nx-btn-toggle-auto');
+        if (gearBtn) {
+          gearBtn.title = msg.value ? 'Mode 1-clic direct : ACTIF (cliquer pour désactiver)' : 'Mode 1-clic direct : INACTIF (cliquer pour activer)';
+          gearBtn.classList.toggle('nx-active', Boolean(msg.value));
+        }
+      }
+    });
+  }
+
+  /**
    * Point d'entrée pour lancer le téléchargement (avec sélection ou direct)
    */
   async function openSelectionOrDownload(serieSlug, capSlug, format = 'image/jpeg') {
@@ -286,8 +328,9 @@
       const chapter = await window.ScraperCore.getChapterData(serieSlug, capSlug);
       getProgressModal().classList.remove('nx-active');
 
-      // Si l'utilisateur a activé le mode automatique sans demander
-      if (localStorage.getItem('nx_auto_download_story') === 'true') {
+      // Vérifier si le mode automatique sans confirmation est activé
+      const isAuto = await isAutoDownloadEnabled();
+      if (isAuto) {
         const storyOrders = chapter.paginas.filter(p => p.isStory).map(p => p.orden);
         executeZipDownload(serieSlug, capSlug, chapter, storyOrders, format);
       } else {
@@ -303,13 +346,15 @@
   /**
    * Injection du panneau flottant sur la page de lecture d'un chapitre
    */
-  function injectFloatingChapterPanel(serieSlug, capSlug) {
+  async function injectFloatingChapterPanel(serieSlug, capSlug) {
     let panel = document.getElementById('nx-floating-panel');
     if (panel) {
       panel.dataset.serieSlug = serieSlug;
       panel.dataset.capSlug = capSlug;
       return;
     }
+
+    const isAuto = await isAutoDownloadEnabled();
 
     panel = document.createElement('div');
     panel.id = 'nx-floating-panel';
@@ -321,6 +366,9 @@
         ${SVG_DOWNLOAD}
         <span>Nexus DL</span>
       </div>
+      <button class="nx-pill-btn ${isAuto ? 'nx-active' : ''}" id="nx-btn-toggle-auto" title="${isAuto ? 'Mode 1-clic direct ACTIF (cliquer pour désactiver)' : 'Mode confirmation ACTIF (cliquer pour activer 1-clic)'}">
+        ${isAuto ? '⚡ 1-clic' : '📋 Sélection'}
+      </button>
       <select class="nx-format-select" id="nx-format-choice" title="Format d'image">
         <option value="image/jpeg">JPG</option>
         <option value="image/png">PNG</option>
@@ -332,6 +380,17 @@
     `;
 
     document.body.appendChild(panel);
+
+    // Bouton bascule 1-clic directement sur le panneau flottant
+    const toggleBtn = document.getElementById('nx-btn-toggle-auto');
+    toggleBtn.addEventListener('click', async () => {
+      const current = await isAutoDownloadEnabled();
+      const next = !current;
+      setAutoDownloadEnabled(next);
+      toggleBtn.textContent = next ? '⚡ 1-clic' : '📋 Sélection';
+      toggleBtn.classList.toggle('nx-active', next);
+      toggleBtn.title = next ? 'Mode 1-clic direct ACTIF (cliquer pour désactiver)' : 'Mode confirmation ACTIF (cliquer pour activer 1-clic)';
+    });
 
     document.getElementById('nx-btn-chapter-dl').addEventListener('click', () => {
       const currentSerie = panel.dataset.serieSlug;

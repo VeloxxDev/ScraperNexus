@@ -786,9 +786,8 @@
     document.getElementById('nx-modal-cancel').addEventListener('click', () => overlay.classList.remove('nx-active'));
 
     confirmBtn.addEventListener('click', () => {
-      if (document.getElementById('nx-remember-auto').checked) {
-        localStorage.setItem('nx_auto_download_story', 'true');
-      }
+      const remember = document.getElementById('nx-remember-auto').checked;
+      localStorage.setItem('nx_auto_download_story', String(remember));
       const format = document.getElementById('nx-modal-format').value;
       const orders = Array.from(selectedOrders);
       overlay.classList.remove('nx-active');
@@ -796,6 +795,10 @@
     });
 
     renderPageRows();
+    const rememberCb = document.getElementById('nx-remember-auto');
+    if (rememberCb) {
+      rememberCb.checked = (localStorage.getItem('nx_auto_download_story') === 'true');
+    }
     requestAnimationFrame(() => overlay.classList.add('nx-active'));
   }
 
@@ -874,10 +877,14 @@
     if (capSlug && serieSlug) {
       let panel = document.getElementById('nx-floating-panel');
       if (!panel) {
+        const isAuto = (localStorage.getItem('nx_auto_download_story') === 'true');
         panel = document.createElement('div');
         panel.id = 'nx-floating-panel';
         panel.innerHTML = `
           <div class="nx-brand-badge">⚡ Nexus DL</div>
+          <button class="nx-pill-btn ${isAuto ? 'nx-active' : ''}" id="nx-btn-toggle-auto" title="${isAuto ? 'Mode 1-clic direct ACTIF (cliquer pour désactiver)' : 'Mode confirmation ACTIF (cliquer pour activer 1-clic)'}">
+            ${isAuto ? '⚡ 1-clic' : '📋 Sélection'}
+          </button>
           <select class="nx-format-select" id="nx-format-choice">
             <option value="image/jpeg">JPG</option>
             <option value="image/png">PNG</option>
@@ -885,6 +892,16 @@
           <button class="nx-btn-download" id="nx-btn-chapter-dl">📥 Télécharger ZIP</button>
         `;
         document.body.appendChild(panel);
+
+        const toggleBtn = document.getElementById('nx-btn-toggle-auto');
+        toggleBtn.addEventListener('click', () => {
+          const current = (localStorage.getItem('nx_auto_download_story') === 'true');
+          const next = !current;
+          localStorage.setItem('nx_auto_download_story', String(next));
+          toggleBtn.textContent = next ? '⚡ 1-clic' : '📋 Sélection';
+          toggleBtn.classList.toggle('nx-active', next);
+          toggleBtn.title = next ? 'Mode 1-clic direct ACTIF (cliquer pour désactiver)' : 'Mode confirmation ACTIF (cliquer pour activer 1-clic)';
+        });
 
         document.getElementById('nx-btn-chapter-dl').addEventListener('click', () => {
           const format = document.getElementById('nx-format-choice').value;

@@ -17,6 +17,10 @@
       "128": "icons/icon128.png"
     }
   },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
   "host_permissions": [
     "*://nexusscanlation.com/*",
     "*://*.nexusscanlation.com/*"
